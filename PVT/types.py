@@ -3,8 +3,6 @@ from torch.nn import Parameter, Module, Sequential, Linear, Dropout, Conv2d
 
 from typing import Union, Protocol, Literal
 
-# from timm.models.vision_transformer import VisionTransformer, PatchEmbed
-
 
 """
 These are interfaces defining relevant ViT properties we want for type safety in our wrapper & modification code.

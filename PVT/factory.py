@@ -1,39 +1,51 @@
-from torch import Device
+import torch
 from timm import create_model
 from timm.models import VisionTransformer
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Literal, Type, Callable, Any, Dict
 from functools import partial
 
 from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone
 from .modifications import ModificationFn, change_stride, replace_pos_embed
+from .wrapper import PretrainedViTWrapper
 
 Dtype = Literal["float32", "float16"]
 
 
 @dataclass
-class WrapperConfig:
-    model_name: str
-    model_arch: TimmArchitectures
+class BackboneConfig:
+    backbone_type: str = "timm"  # e.g., "timm", "dinov3", or a custom registered type
+    model_arch: TimmArchitectures = "dinov2_s"
     pretrained: bool = True
     checkpoint_path: str | None = None
-
-    device: Device = "cuda"
-    dtype: Dtype = "float32"
 
     stride: tuple[int, int] | None = None
     remove_pos_embed: bool = False
     add_flash_attn: bool = False
 
-    modifications: list[ModificationFn] | None = None
+    dynamic_img_size: bool = True
+    dynamic_img_pad: bool = False
+
+    modifications: list[ModificationFn] = field(default_factory=list)
+
+
+@dataclass
+class WrapperConfig:
+    backbone_cfg: BackboneConfig
+    wrapper_class: Type[PretrainedViTWrapper] = PretrainedViTWrapper
+    wrapper_kwargs: Dict[str, Any] = field(default_factory=dict)
+    transform: ImageTransform | None = None
 
 
 def _populate_modifications(
-    prev_modifications: list[ModificationFn] | None, cfg: WrapperConfig
+    prev_modifications: list[ModificationFn] | None, cfg: BackboneConfig
 ) -> list[ModificationFn]:
     if prev_modifications is None:
         prev_modifications = []
+    else:
+        # copy list to avoid mutating class default
+        prev_modifications = list(prev_modifications)
 
     if cfg.stride:
         prev_modifications.append(partial(change_stride, new_stride=cfg.stride))
@@ -44,28 +56,88 @@ def _populate_modifications(
     return prev_modifications
 
 
-def create_timm_backbone(cfg: WrapperConfig) -> ViTBackbone:
+def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
     model_identifier = ARCHS_TO_IDS[cfg.model_arch]
-    vit = create_model(model_identifier, pretrained=cfg.pretrained, checkpoint_path=cfg.checkpoint_path)
+
+    if "sam" in model_identifier or "conv" in model_identifier:
+        vit = create_model(
+            model_identifier,
+            pretrained=cfg.pretrained,
+            checkpoint_path=cfg.checkpoint_path,
+        )
+    else:
+        vit = create_model(
+            model_identifier,
+            pretrained=cfg.pretrained,
+            checkpoint_path=cfg.checkpoint_path,
+            dynamic_img_size=cfg.dynamic_img_size,
+            dynamic_img_pad=cfg.dynamic_img_pad,
+            pretrained_strict=False,
+        )
 
     assert isinstance(vit, VisionTransformer)
 
-    if cfg.modifications is not None:
-        for mod in cfg.modifications:
-            vit = mod(vit)
+    mods = _populate_modifications(cfg.modifications, cfg)
+    for mod in mods:
+        vit = mod(vit)
 
     return vit
 
 
-class WrapperFactory:
-    _registry: dict[str, WrapperConfig] = {}
+class BackboneRegistry:
+    _registry: Dict[str, Callable[[BackboneConfig], ViTBackbone]] = {}
+
+    @classmethod
+    def register(cls, backbone_type: str, builder_fn: Callable[[BackboneConfig], ViTBackbone]) -> None:
+        cls._registry[backbone_type] = builder_fn
+
+    @classmethod
+    def build(cls, cfg: BackboneConfig) -> ViTBackbone:
+        builder = cls._registry.get(cfg.backbone_type)
+        if not builder:
+            raise ValueError(f"Backbone type '{cfg.backbone_type}' not registered in BackboneRegistry.")
+        return builder(cfg)
+
+
+# Register the default timm backbone builder
+BackboneRegistry.register("timm", create_timm_backbone)
+
+
+class ViTFactory:
+    _registry: Dict[str, WrapperConfig] = {}
 
     @classmethod
     def register(cls, name: str, cfg: WrapperConfig) -> None:
         cls._registry[name] = cfg
 
     @classmethod
-    def build(cls, name: str) -> ViTBackbone:
+    def build(cls, name: str, device: torch.device | str = "cuda", **override_kwargs) -> PretrainedViTWrapper:
+        # Auto-register standard architectures if they are not in the registry but are valid timm architectures
+        if name not in cls._registry:
+            if name in ARCHS_TO_IDS:
+                cls.register(
+                    name,
+                    WrapperConfig(
+                        backbone_cfg=BackboneConfig(backbone_type="timm", model_arch=name)  # type: ignore
+                    ),
+                )
+            else:
+                raise KeyError(f"Model variant '{name}' not found in registry and is not a default TimmArchitecture.")
+
         cfg = cls._registry[name]
-        cfg.modifications = _populate_modifications(cfg.modifications, cfg)
-        return create_timm_backbone(cfg)
+
+        # Build the backbone using BackboneRegistry
+        vit = BackboneRegistry.build(cfg.backbone_cfg)
+
+        # Prepare wrapper parameters
+        wrapper_cls = cfg.wrapper_class
+        kwargs = {**cfg.wrapper_kwargs, "device": device, **override_kwargs}
+
+        transform = kwargs.pop("transform", cfg.transform)
+
+        # Construct wrapper
+        wrapper = wrapper_cls(vit=vit, **kwargs)
+        wrapper.name = name
+        wrapper.arch_name = cfg.backbone_cfg.model_arch
+        wrapper.transform = transform
+        return wrapper
