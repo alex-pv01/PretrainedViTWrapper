@@ -1,7 +1,12 @@
 from torch import Tensor
+from torchvision.transforms import Compose
 from torch.nn import Parameter, Module, Sequential, Linear, Dropout, Conv2d
 
-from typing import Union, Protocol, Literal
+from typing import Any, Union, Protocol, Literal, ParamSpec, Concatenate, Callable
+
+
+P = ParamSpec("P")
+ImageTransform = Callable[Concatenate[int, int, P], Compose]
 
 
 """
@@ -90,6 +95,11 @@ class ViTBackbone(Protocol):
         attn_mask: Tensor | None = None,
     ) -> list[Tensor]: ...
 
+    def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
+
+
+J = ParamSpec("J")
+ModificationFn = Callable[Concatenate[ViTBackbone, J], ViTBackbone]
 
 TimmArchitectures = Literal[
     "dino_s",

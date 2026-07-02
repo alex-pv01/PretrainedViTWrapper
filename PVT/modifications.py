@@ -1,13 +1,8 @@
 from torch import Tensor
 from torch.nn import Parameter, Sequential
 from types import MethodType
-from typing import Callable, ParamSpec, Concatenate
 
 from .types import ViTBackbone, HasPatchEmbed, HasBlock
-
-
-P = ParamSpec("P")
-ModificationFn = Callable[Concatenate[ViTBackbone, P], ViTBackbone]
 
 
 def change_stride(vit: ViTBackbone, new_stride: tuple[int, int]) -> ViTBackbone:

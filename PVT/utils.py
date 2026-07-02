@@ -1,9 +1,8 @@
 import numpy as np
 import torch
 from torchvision import transforms
-from PIL import Image
 
-from typing import Literal, ParamSpec, Concatenate, Callable
+from typing import Literal
 
 
 def to_numpy(tensor: torch.Tensor) -> np.ndarray:
@@ -31,9 +30,6 @@ unnormalize = transforms.Normalize(
     mean=INV_MU,
     std=INV_SIGMA,
 )
-
-P = ParamSpec("P")
-ImageTransform = Callable[Concatenate[int, int, P], transforms.Compose]
 
 
 def closest_crop(h: int, w: int, patch_size: int = 14, to_tensor: bool = True) -> transforms.Compose:

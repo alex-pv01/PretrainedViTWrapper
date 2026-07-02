@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from typing import Literal, Type, Callable, Any, Dict
 from functools import partial
 
-from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone
-from .modifications import ModificationFn, change_stride, replace_pos_embed
+from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone, ImageTransform, ModificationFn
+from .modifications import change_stride, replace_pos_embed
 from .wrapper import PretrainedViTWrapper
 
 Dtype = Literal["float32", "float16"]
