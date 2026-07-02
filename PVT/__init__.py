@@ -1,6 +1,6 @@
 from .wrapper import PretrainedViTWrapper
 from .factory import (
-    ViTFactory,
+    WrapperRegistry,
     BackboneRegistry,
     BackboneConfig,
     WrapperConfig,

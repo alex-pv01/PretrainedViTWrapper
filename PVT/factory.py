@@ -8,6 +8,7 @@ from functools import partial
 
 from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone, ImageTransform, ModificationFn
 from .modifications import change_stride, replace_pos_embed
+from .utils import closest_resize
 from .wrapper import PretrainedViTWrapper
 
 Dtype = Literal["float32", "float16"]
@@ -35,7 +36,7 @@ class WrapperConfig:
     backbone_cfg: BackboneConfig
     wrapper_class: Type[PretrainedViTWrapper] = PretrainedViTWrapper
     wrapper_kwargs: Dict[str, Any] = field(default_factory=dict)
-    transform: ImageTransform | None = None
+    transform: ImageTransform = closest_resize
 
 
 def _populate_modifications(
@@ -75,7 +76,7 @@ def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
             pretrained_strict=False,
         )
 
-    assert isinstance(vit, VisionTransformer)
+    # assert isinstance(vit, VisionTransformer)
 
     mods = _populate_modifications(cfg.modifications, cfg)
     for mod in mods:
@@ -103,7 +104,7 @@ class BackboneRegistry:
 BackboneRegistry.register("timm", create_timm_backbone)
 
 
-class ViTFactory:
+class WrapperRegistry:
     _registry: Dict[str, WrapperConfig] = {}
 
     @classmethod

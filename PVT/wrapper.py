@@ -3,6 +3,7 @@ from torch import Tensor
 from torch.nn import Module
 from PIL import Image
 
+from .utils import closest_resize
 from .types import ViTBackbone, TimmArchitectures, ImageTransform
 
 
@@ -13,7 +14,7 @@ class PretrainedViTWrapper(Module):
         device,
         name: str = "",
         arch_name: TimmArchitectures | None = None,
-        transform: ImageTransform | None = None,
+        transform: ImageTransform = closest_resize,
     ):
         super().__init__()
         self.vit: ViTBackbone = vit
@@ -35,9 +36,6 @@ class PretrainedViTWrapper(Module):
     def preprocess_input(self, x: Tensor | Image.Image | list[Image.Image]) -> Tensor:
         if isinstance(x, Tensor):
             return x.to(self.device)
-
-        if self.transform is None:
-            raise ValueError("An image transform must be provided to process PIL Images.")
 
         p_size = self.patch_size[0] if isinstance(self.patch_size, tuple) else self.patch_size
 
