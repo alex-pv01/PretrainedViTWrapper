@@ -1,8 +1,9 @@
 from torch import Tensor
 from torchvision.transforms import Compose
 from torch.nn import Parameter, Module, Sequential, Linear, Dropout, Conv2d
+import logging
 
-from typing import Any, Union, Protocol, Literal, ParamSpec, Concatenate, Callable, TypeVar, Type, TypeGuard
+from typing import Any, Union, Protocol, Literal, ParamSpec, Concatenate, Callable, TypeVar, Type, TypeGuard, cast
 
 
 P = ParamSpec("P")
@@ -15,13 +16,26 @@ Should be respected by `timm` and DINO style models.
 """
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 def satisfies_protocol(obj: object, protocol_cls: Type[T]) -> TypeGuard[T]:
     """Runtime check if an object implements the structural interface of a Protocol class."""
-    if not hasattr(protocol_cls, "__protocol_attrs__"):
+    protocol_attrs = getattr(protocol_cls, "__protocol_attrs__", None)
+    if protocol_attrs is None:
         raise TypeError(f"{protocol_cls} is not a Protocol class")
-    return all(hasattr(obj, attr) for attr in protocol_cls.__protocol_attrs__)
+    attrs = cast(tuple[str, ...], protocol_attrs)
+    missing_attrs = [attr for attr in attrs if not hasattr(obj, attr)]
+    if missing_attrs:
+        logger.warning(
+            "Object of type %s does not satisfy protocol %s; missing attributes: %s",
+            type(obj).__name__,
+            protocol_cls.__name__,
+            ", ".join(missing_attrs),
+        )
+        print(missing_attrs)
+        return False
+    return True
 
 
 class HasAttn(Protocol):
@@ -73,7 +87,7 @@ class HasPatchEmbed(Protocol):
     def dynamic_feat_size(self, img_size: tuple[int, int]) -> tuple[int, int]: ...
 
 
-class ViTBackbone(Protocol):
+class TimmViT(Protocol):
     # Model constants
     num_features: int
 
@@ -97,7 +111,7 @@ class ViTBackbone(Protocol):
     def get_intermediate_layers(
         self,
         x: Tensor,
-        n: Union[int, list[int], tuple[int]] = 1,
+        n: int | list[int] | tuple[int] = 1,
         reshape: bool = False,
         return_prefix_tokens: bool = False,
         norm: bool = False,
@@ -107,10 +121,47 @@ class ViTBackbone(Protocol):
     def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
 
 
+class Dv3ViT(Protocol):
+    # Model constants
+    num_features: int
+
+    n_storage_tokens: int
+
+    # Layers
+    rope_embed: Parameter | None
+
+    patch_embed: HasPatchEmbed
+
+    blocks: Sequential | Module
+
+    # Methods
+    def forward_features(
+        self,
+        x: Tensor,
+        attn_mask: Tensor | None = None,
+        is_causal: bool = False,
+    ) -> list[dict[str, Tensor]]: ...
+
+    def get_intermediate_layers(
+        self,
+        x: Tensor,
+        n: Union[int, list[int], tuple[int]] = 1,
+        reshape: bool = False,
+        return_prefix_tokens: bool = False,
+        norm: bool = False,
+        attn_mask: Tensor | None = None,
+    ) -> tuple[Tensor | tuple[Tensor, ...]]: ...
+
+    def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
+
+
+ViTBackbone = TimmViT | Dv3ViT
+
+
 J = ParamSpec("J")
 ModificationFn = Callable[Concatenate[ViTBackbone, J], ViTBackbone]
 
-TimmArchitectures = Literal[
+Architectures = Literal[
     "dino_s",
     "dino_b",
     "dinov2_s",
@@ -127,7 +178,7 @@ TimmArchitectures = Literal[
     "clip_b",
     "eva02_b",
 ]
-ARCHS_TO_IDS: dict[TimmArchitectures, str] = {
+ARCHS_TO_TIMM_IDS: dict[Architectures, str] = {
     "dino_s": "vit_small_patch16_224.dino",
     "dino_b": "vit_base_patch16_224.dino",
     "dinov2_s": "vit_small_patch14_reg4_dinov2.lvd142m",
@@ -143,4 +194,12 @@ ARCHS_TO_IDS: dict[TimmArchitectures, str] = {
     "sam_b": "samvit_base_patch16.sa1b",
     "clip_b": "vit_base_patch16_clip_224.openai",
     "eva02_b": "eva02_base_patch14_224.mim_in22k",
+}
+
+ARCHS_TO_LOCAL_IDS: dict[Architectures, str] = {
+    "dinov3_s": "dinov3_vits16",
+    "dinov3_s+": "dinov3_vits16_plus",
+    "dinov3_b": "dinov3_vitb16",
+    "EUPE_t": "eupe_vitt16",
+    "EUPE_s": "eupe_vits16",
 }

@@ -4,7 +4,7 @@ from torch.nn import Module
 from PIL import Image
 
 from .utils import closest_resize
-from .types import ViTBackbone, TimmArchitectures, ImageTransform
+from .types import ViTBackbone, Architectures, ImageTransform, TimmViT, satisfies_protocol, Dv3ViT
 
 
 class PretrainedViTWrapper(Module):
@@ -13,14 +13,14 @@ class PretrainedViTWrapper(Module):
         vit: ViTBackbone,
         device,
         name: str = "",
-        arch_name: TimmArchitectures | None = None,
+        arch_name: Architectures | None = None,
         transform: ImageTransform = closest_resize,
     ):
         super().__init__()
         self.vit: ViTBackbone = vit
 
         self.name: str = name
-        self.arch_name: TimmArchitectures | None = arch_name
+        self.arch_name: Architectures | None = arch_name
         self.device = device
         self.transform = transform
 
@@ -28,10 +28,18 @@ class PretrainedViTWrapper(Module):
         self.patch_size = self.vit.patch_embed.patch_size
 
         self.embed_dim = self.vit.num_features
-        self.num_prefix_tokens = getattr(self.vit, "num_prefix_tokens", 0)
         self.num_blocks = len(self.vit.blocks)  # type: ignore
 
         self.to(device)
+
+    @property
+    def num_prefix_tokens(self) -> int:
+        if satisfies_protocol(self.vit, TimmViT):
+            return self.vit.num_prefix_tokens
+        elif satisfies_protocol(self.vit, Dv3ViT):
+            return self.vit.n_storage_tokens
+        else:
+            return 0
 
     def preprocess_input(self, x: Tensor | Image.Image | list[Image.Image]) -> Tensor:
         if isinstance(x, Tensor):
@@ -89,7 +97,13 @@ class PretrainedViTWrapper(Module):
         b, _, _, _ = x_tensor.shape
         n_patch_h, n_patch_w = self._get_tokens_per_dim(x_tensor)
 
-        feats = self.vit.forward_features(x_tensor)
+        if satisfies_protocol(self.vit, TimmViT):
+            feats = self.vit.forward_features(x_tensor)
+        elif satisfies_protocol(self.vit, Dv3ViT):
+            feats = self.vit.forward_features(x_tensor)["x_norm_patchtokens"]
+        else:
+            raise TypeError(f"Unsupported ViT type: {type(self.vit)}")
+
         feats = feats[:, self.num_prefix_tokens :]
         feats = feats.permute(0, 2, 1)
 

@@ -1,12 +1,21 @@
 import torch
 from timm import create_model
-from timm.models import VisionTransformer
 
 from dataclasses import dataclass, field
 from typing import Literal, Type, Callable, Any, Dict
 from functools import partial
 
-from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone, ImageTransform, ModificationFn, satisfies_protocol
+from .types import (
+    Architectures,
+    ARCHS_TO_TIMM_IDS,
+    ViTBackbone,
+    ImageTransform,
+    ModificationFn,
+    satisfies_protocol,
+    ARCHS_TO_LOCAL_IDS,
+    TimmViT,
+    Dv3ViT,
+)
 from .modifications import change_stride, replace_pos_embed
 from .utils import closest_resize
 from .wrapper import PretrainedViTWrapper
@@ -17,7 +26,7 @@ Dtype = Literal["float32", "float16"]
 @dataclass
 class BackboneConfig:
     backbone_type: str = "timm"  # e.g., "timm", "dinov3", or a custom registered type
-    model_arch: TimmArchitectures = "dinov2_s"
+    model_arch: Architectures = "dinov2_s"
     pretrained: bool = True
     checkpoint_path: str | None = None
     model_conf_path: str | None = None
@@ -58,9 +67,8 @@ def _populate_modifications(
     return prev_modifications
 
 
-def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
-    model_identifier = ARCHS_TO_IDS[cfg.model_arch]
-    print(cfg, model_identifier)
+def create_timm_backbone(cfg: BackboneConfig) -> TimmViT:
+    model_identifier = ARCHS_TO_TIMM_IDS[cfg.model_arch]
 
     if "sam" in model_identifier or "conv" in model_identifier:
         vit = create_model(
@@ -69,7 +77,6 @@ def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
             checkpoint_path=cfg.checkpoint_path,
         )
     else:
-        pretrained = False if cfg.checkpoint_path else cfg.pretrained
         vit = create_model(
             model_identifier,
             pretrained=cfg.pretrained,
@@ -78,12 +85,24 @@ def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
             dynamic_img_pad=cfg.dynamic_img_pad,
             pretrained_strict=False,
         )
-    assert satisfies_protocol(vit, ViTBackbone)
+    assert satisfies_protocol(vit, TimmViT)
 
     mods = _populate_modifications(cfg.modifications, cfg)
     for mod in mods:
         vit = mod(vit)
 
+    return vit
+
+
+def create_local_backbone(cfg: BackboneConfig) -> Dv3ViT:
+    model_identifier = ARCHS_TO_LOCAL_IDS[cfg.model_arch]
+
+    vit = torch.hub.load(cfg.model_conf_path, model_identifier, source="local", weights=cfg.checkpoint_path)
+    assert satisfies_protocol(vit, Dv3ViT)
+
+    mods = _populate_modifications(cfg.modifications, cfg)
+    for mod in mods:
+        vit = mod(vit)
     return vit
 
 
@@ -104,6 +123,7 @@ class BackboneRegistry:
 
 # Register the default timm backbone builder
 BackboneRegistry.register("timm", create_timm_backbone)
+BackboneRegistry.register("torch_hub", create_local_backbone)
 
 
 class WrapperRegistry:
@@ -117,7 +137,7 @@ class WrapperRegistry:
     def build(cls, name: str, device: torch.device | str = "cuda", **override_kwargs) -> PretrainedViTWrapper:
         # Auto-register standard architectures if they are not in the registry but are valid timm architectures
         if name not in cls._registry:
-            if name in ARCHS_TO_IDS:
+            if name in ARCHS_TO_TIMM_IDS:
                 cls.register(
                     name,
                     WrapperConfig(
