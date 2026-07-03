@@ -16,6 +16,18 @@ class PretrainedViTWrapper(Module):
         arch_name: Architectures | None = None,
         transform: ImageTransform = closest_resize,
     ):
+        """Wrapper around a ViTBackoe (timm or local) with unified typesafe interface.
+        Designed for feature extraction of variable sized `x`.
+
+
+        Args:
+            vit (ViTBackbone): pytorch module that satisfies given ViTBackbone protocol (timm or local)
+            device (_type_): torch device
+            name (str, optional): _description_. Defaults to "".
+            arch_name (Architectures | None, optional): _description_. Defaults to None.
+            transform (ImageTransform, optional): transform generator i.e function that returns torchvision transform
+                as a function of shape of `x` . Defaults to closest_resize.
+        """
         super().__init__()
         self.vit: ViTBackbone = vit
 
@@ -41,21 +53,44 @@ class PretrainedViTWrapper(Module):
         else:
             return 0
 
+    def _input_tensor_checks(self, x: Tensor) -> bool:
+        is_4D = x.ndim == 4
+        is_h_patch_size_multiple = x.shape[2] % self.patch_size[0] == 0
+        is_w_patch_size_multiple = x.shape[3] % self.patch_size[1] == 0
+        return is_4D and is_h_patch_size_multiple and is_w_patch_size_multiple
+
     def preprocess_input(self, x: Tensor | Image.Image | list[Image.Image]) -> Tensor:
+        """Apply input transformation to `x` iff `x` is a PIL image.
+        NB: this 'transform' is actually a function that generates the correct transform based on dims of `x`
+
+        Args:
+            x (Tensor | Image.Image | list[Image.Image]): input image
+
+        Raises:
+            TypeError: x is invalid type
+
+        Returns:
+            Tensor: [B,C,H,W] tensor for `x`,
+        """
+        p_size = self.patch_size[0] if isinstance(self.patch_size, tuple) else self.patch_size
         if isinstance(x, Tensor):
             return x.to(self.device)
-
-        p_size = self.patch_size[0] if isinstance(self.patch_size, tuple) else self.patch_size
-
-        if isinstance(x, Image.Image):
+        elif isinstance(x, Image.Image):
             w, h = x.size
             resolved_transform = self.transform(h, w, patch_size=p_size)
             img_tensor: Tensor = resolved_transform(x).unsqueeze(0).to(self.device)  # type: ignore
+            assert self._input_tensor_checks(img_tensor), (
+                f"`x` shape :{img_tensor.shape} not valid for patch size {self.patch_size}"
+            )
             return img_tensor.to(self.device)
         elif isinstance(x, list) and len(x) > 0 and isinstance(x[0], Image.Image):
             w, h = x[0].size
             resolved_transform = self.transform(h, w, patch_size=p_size)
-            return torch.stack([resolved_transform(img) for img in x]).to(self.device)  # type: ignore
+            stacked = torch.stack([resolved_transform(img) for img in x]).to(self.device)  # type: ignore
+            assert self._input_tensor_checks(stacked), (
+                f"`x` shape :{stacked.shape} not valid for patch size {self.patch_size}"
+            )
+            return stacked
 
         raise TypeError(f"Unsupported input type: {type(x)}")
 
@@ -93,6 +128,18 @@ class PretrainedViTWrapper(Module):
         x: Tensor | Image.Image | list[Image.Image],
         make_2D: bool = True,
     ) -> Tensor:
+        """Extract
+
+        Args:
+            x (Tensor | Image.Image | list[Image.Image]): input image
+            make_2D (bool, optional): make features 2D, based on size inferred from `x`, `stride`, and `patch_size`. Defaults to True.
+
+        Raises:
+            TypeError: if ViT backbone isn't parsed by protocol
+
+        Returns:
+            Tensor: [B,C,N] or [B,C,H,W] (if `make_2D=True`) features for `x`
+        """
         x_tensor = self.preprocess_input(x)
         b, _, _, _ = x_tensor.shape
         n_patch_h, n_patch_w = self._get_tokens_per_dim(x_tensor)
@@ -101,6 +148,7 @@ class PretrainedViTWrapper(Module):
             feats = self.vit.forward_features(x_tensor)
             feats = feats[:, self.num_prefix_tokens :]
         elif satisfies_protocol(self.vit, Dv3ViT):
+            # dv3 returns dict; x_norm_patchtokens already strips prefix tokens
             feats = self.vit.forward_features(x_tensor)["x_norm_patchtokens"]
         else:
             raise TypeError(f"Unsupported ViT type: {type(self.vit)}")
