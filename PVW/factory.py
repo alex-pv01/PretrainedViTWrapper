@@ -39,6 +39,7 @@ class BackboneConfig:
     dynamic_img_pad: bool = False
 
     modifications: list[ModificationFn] = field(default_factory=list)
+    dtype: torch.dtype = torch.float32
 
 
 @dataclass
@@ -47,6 +48,7 @@ class WrapperConfig:
     wrapper_class: Type[PretrainedViTWrapper] = PretrainedViTWrapper
     wrapper_kwargs: Dict[str, Any] = field(default_factory=dict)
     transform: ImageTransform = closest_resize
+    dtype: torch.dtype = torch.float32
 
 
 def _populate_modifications(
@@ -91,6 +93,8 @@ def create_timm_backbone(cfg: BackboneConfig) -> TimmViT:
     for mod in mods:
         vit = mod(vit)
 
+    vit = vit.to(dtype=cfg.dtype)
+
     return vit
 
 
@@ -115,6 +119,9 @@ def create_local_backbone(cfg: BackboneConfig) -> Dv3ViT:
     mods = _populate_modifications(cfg.modifications, cfg)
     for mod in mods:
         vit = mod(vit)
+
+    vit = vit.to(dtype=cfg.dtype)
+
     return vit
 
 
@@ -168,7 +175,15 @@ class WrapperRegistry:
 
         # Prepare wrapper parameters
         wrapper_cls = cfg.wrapper_class
-        kwargs = {**cfg.wrapper_kwargs, "device": device, **override_kwargs}
+        kwargs = {
+            **cfg.wrapper_kwargs,
+            "device": device,
+            **override_kwargs,
+        }
+        import inspect
+        sig = inspect.signature(wrapper_cls.__init__)
+        if "dtype" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            kwargs["dtype"] = cfg.dtype
 
         transform = kwargs.pop("transform", cfg.transform)
 

@@ -120,6 +120,8 @@ class TimmViT(Protocol):
 
     def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
 
+    def to(self, *args: Any, **kwargs: Any) -> "TimmViT": ...
+
 
 class Dv3ViT(Protocol):
     # Model constants
@@ -154,12 +156,14 @@ class Dv3ViT(Protocol):
 
     def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
 
+    def to(self, *args: Any, **kwargs: Any) -> "Dv3ViT": ...
+
 
 ViTBackbone = TimmViT | Dv3ViT
 
-
+V = TypeVar("V", bound=ViTBackbone)
 J = ParamSpec("J")
-ModificationFn = Callable[Concatenate[ViTBackbone, J], ViTBackbone]
+ModificationFn = Callable[Concatenate[V, J], V]
 
 Architectures = Literal[
     "dino_s",
