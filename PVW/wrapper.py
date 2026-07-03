@@ -99,12 +99,11 @@ class PretrainedViTWrapper(Module):
 
         if satisfies_protocol(self.vit, TimmViT):
             feats = self.vit.forward_features(x_tensor)
+            feats = feats[:, self.num_prefix_tokens :]
         elif satisfies_protocol(self.vit, Dv3ViT):
             feats = self.vit.forward_features(x_tensor)["x_norm_patchtokens"]
         else:
             raise TypeError(f"Unsupported ViT type: {type(self.vit)}")
-
-        feats = feats[:, self.num_prefix_tokens :]
         feats = feats.permute(0, 2, 1)
 
         if make_2D:

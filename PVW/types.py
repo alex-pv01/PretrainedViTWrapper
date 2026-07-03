@@ -19,7 +19,7 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-def satisfies_protocol(obj: object, protocol_cls: Type[T]) -> TypeGuard[T]:
+def satisfies_protocol(obj: object, protocol_cls: Type[T], verbose: bool = False) -> TypeGuard[T]:
     """Runtime check if an object implements the structural interface of a Protocol class."""
     protocol_attrs = getattr(protocol_cls, "__protocol_attrs__", None)
     if protocol_attrs is None:
@@ -27,13 +27,13 @@ def satisfies_protocol(obj: object, protocol_cls: Type[T]) -> TypeGuard[T]:
     attrs = cast(tuple[str, ...], protocol_attrs)
     missing_attrs = [attr for attr in attrs if not hasattr(obj, attr)]
     if missing_attrs:
-        logger.warning(
-            "Object of type %s does not satisfy protocol %s; missing attributes: %s",
-            type(obj).__name__,
-            protocol_cls.__name__,
-            ", ".join(missing_attrs),
-        )
-        print(missing_attrs)
+        if verbose:
+            logger.warning(
+                "%s doesn't satisfy %s; missing: %s",
+                type(obj).__name__,
+                protocol_cls.__name__,
+                ", ".join(missing_attrs),
+            )
         return False
     return True
 
@@ -140,7 +140,7 @@ class Dv3ViT(Protocol):
         x: Tensor,
         attn_mask: Tensor | None = None,
         is_causal: bool = False,
-    ) -> list[dict[str, Tensor]]: ...
+    ) -> dict[str, Tensor]: ...
 
     def get_intermediate_layers(
         self,
@@ -198,7 +198,7 @@ ARCHS_TO_TIMM_IDS: dict[Architectures, str] = {
 
 ARCHS_TO_LOCAL_IDS: dict[Architectures, str] = {
     "dinov3_s": "dinov3_vits16",
-    "dinov3_s+": "dinov3_vits16_plus",
+    "dinov3_s+": "dinov3_vits16plus",
     "dinov3_b": "dinov3_vitb16",
     "EUPE_t": "eupe_vitt16",
     "EUPE_s": "eupe_vits16",
