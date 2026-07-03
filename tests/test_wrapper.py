@@ -9,8 +9,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from PVT import ViTFactory, PretrainedViTWrapper, WrapperConfig, BackboneConfig, do_pca
-from PVT.utils import closest_resize
+from PVW import WrapperRegistry, PretrainedViTWrapper, WrapperConfig, BackboneConfig, do_pca
+from PVW.utils import closest_resize
 
 
 def create_synthetic_image() -> Image.Image:
@@ -43,9 +43,9 @@ def test_dinov2_wrapper_with_pil_and_pca():
         ),
         transform=lambda h, w, **kwargs: img_transform,
     )
-    ViTFactory.register("dinov2_s_test", cfg)
+    WrapperRegistry.register("dinov2_s_test", cfg)
 
-    model = ViTFactory.build("dinov2_s_test", device="cpu")
+    model = WrapperRegistry.build("dinov2_s_test", device="cpu")
     assert isinstance(model, PretrainedViTWrapper)
     assert model.transform is not None
 
@@ -100,9 +100,9 @@ def test_dinov2_size_agnostic_transform():
         ),
         transform=closest_resize,
     )
-    ViTFactory.register("dinov2_s_size_agnostic", cfg)
+    WrapperRegistry.register("dinov2_s_size_agnostic", cfg)
 
-    model = ViTFactory.build("dinov2_s_size_agnostic", device="cpu")
+    model = WrapperRegistry.build("dinov2_s_size_agnostic", device="cpu")
     assert isinstance(model, PretrainedViTWrapper)
     assert model.transform == closest_resize
 

@@ -59,6 +59,7 @@ def _populate_modifications(
 
 def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
     model_identifier = ARCHS_TO_IDS[cfg.model_arch]
+    print(cfg, model_identifier)
 
     if "sam" in model_identifier or "conv" in model_identifier:
         vit = create_model(
@@ -67,6 +68,7 @@ def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
             checkpoint_path=cfg.checkpoint_path,
         )
     else:
+        pretrained = False if cfg.checkpoint_path else cfg.pretrained
         vit = create_model(
             model_identifier,
             pretrained=cfg.pretrained,

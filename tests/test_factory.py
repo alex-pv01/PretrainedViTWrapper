@@ -2,14 +2,14 @@ import pytest
 import torch
 from torch import nn
 
-from PVT import (
-    ViTFactory,
+from PVW import (
+    WrapperRegistry,
     BackboneRegistry,
     BackboneConfig,
     WrapperConfig,
     PretrainedViTWrapper,
 )
-from PVT.types import ViTBackbone
+from PVW.types import ViTBackbone
 
 
 # Create a Mock Backbone class
@@ -57,10 +57,10 @@ def test_custom_backbone_and_wrapper_registration():
         wrapper_kwargs={"custom_arg": "registered_value"},
     )
 
-    ViTFactory.register("my_custom_model", custom_cfg)
+    WrapperRegistry.register("my_custom_model", custom_cfg)
 
     # 3. Build the model through ViTFactory
-    model = ViTFactory.build("my_custom_model", device="cpu")
+    model = WrapperRegistry.build("my_custom_model", device="cpu")
 
     # 4. Assertions to verify the architecture was successfully constructed
     assert isinstance(model, CustomWrapper)
@@ -75,7 +75,7 @@ def test_custom_backbone_and_wrapper_registration():
 
 def test_factory_arg_overrides():
     # Verify that we can override registered kwargs at build time
-    model = ViTFactory.build("my_custom_model", device="cpu", custom_arg="overridden_value")
+    model = WrapperRegistry.build("my_custom_model", device="cpu", custom_arg="overridden_value")
     assert isinstance(model, CustomWrapper)
     assert model.custom_arg == "overridden_value"
 
@@ -83,7 +83,7 @@ def test_factory_arg_overrides():
 def test_autoregistration_invalid_name():
     # Attempting to build an unknown architecture that's not in ARCHS_TO_IDS should raise KeyError
     with pytest.raises(KeyError):
-        ViTFactory.build("non_existent_arch", device="cpu")
+        WrapperRegistry.build("non_existent_arch", device="cpu")
 
 
 def test_timm_backbone_building():
@@ -95,8 +95,8 @@ def test_timm_backbone_building():
             pretrained=False,
         )
     )
-    ViTFactory.register("deit_s_random", cfg)
-    model = ViTFactory.build("deit_s_random", device="cpu")
+    WrapperRegistry.register("deit_s_random", cfg)
+    model = WrapperRegistry.build("deit_s_random", device="cpu")
     assert isinstance(model, PretrainedViTWrapper)
     assert model.name == "deit_s_random"
     assert model.arch_name == "deit_s"
