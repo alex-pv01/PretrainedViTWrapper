@@ -1,4 +1,5 @@
 import os
+import pytest
 
 from torchvision import transforms
 from PIL import Image, ImageDraw
@@ -9,7 +10,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from PVW import WrapperRegistry, PretrainedViTWrapper, WrapperConfig, BackboneConfig, do_pca
+from PVW import WrapperRegistry, PretrainedViTWrapper, WrapperConfig, BackboneConfig, BackboneRegistry, do_pca
 from PVW.utils import closest_resize
 
 
@@ -132,3 +133,37 @@ def test_dinov2_forward_intermediates():
     for feat in intermediates:
         # Expected shape: (1, 384, 21, 21)
         assert feat.shape == (1, 384, 21, 21)
+
+
+DINOV3_DIR_MISSING = not os.path.isdir("models/dinov3")
+
+
+@pytest.mark.skipif(DINOV3_DIR_MISSING, reason="models/dinov3 directory is missing")
+def test_dinov3_forward_features_and_intermediates():
+    # Build unweighted DINOv3 backbone
+    cfg = BackboneConfig(
+        backbone_type="torch_hub",
+        model_arch="dinov3_s+",
+        model_conf_path="models/dinov3",
+        checkpoint_path=None,
+    )
+    vit = BackboneRegistry.build(cfg)
+    model = PretrainedViTWrapper(vit, device="cpu", name="dinov3_s", arch_name="dinov3_s+")
+
+    # Create synthetic input image (300x300)
+    pil_img = create_synthetic_image()
+
+    # Test forward_features
+    # dinov3_s+ has embed_dim=384, patch_size=16
+    # 300 % 16 = 12. 300 - 12 = 288.
+    # tokens per dimension = 288 / 16 = 18.
+    # Expected shape: (1, 384, 18, 18)
+    features = model.forward_features(pil_img, make_2D=True)
+    assert features.shape == (1, 384, 18, 18)
+
+    # Test forward_intermediates
+    intermediates = model.forward_intermediates(pil_img, n=2, make_2D=True)
+    assert isinstance(intermediates, list)
+    assert len(intermediates) == 2
+    for feat in intermediates:
+        assert feat.shape == (1, 384, 18, 18)
