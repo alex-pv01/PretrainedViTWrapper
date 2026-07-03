@@ -3,7 +3,7 @@ from torch import Tensor
 from torch.nn import Module
 from PIL import Image
 
-from .utils import closest_resize
+from .utils import closest_resize, logger
 from .types import ViTBackbone, Architectures, ImageTransform, TimmViT, satisfies_protocol, Dv3ViT
 
 
@@ -43,6 +43,16 @@ class PretrainedViTWrapper(Module):
         self.num_blocks = len(self.vit.blocks)  # type: ignore
 
         self.to(device)
+        logger.info(
+            "Initialized PretrainedViTWrapper - name: '%s', arch: '%s', device: %s, stride: %s, patch_size: %s, embed_dim: %d, num_blocks: %d",
+            self.name,
+            self.arch_name,
+            self.device,
+            self.stride,
+            self.patch_size,
+            self.embed_dim,
+            self.num_blocks,
+        )
 
     @property
     def num_prefix_tokens(self) -> int:
@@ -77,6 +87,7 @@ class PretrainedViTWrapper(Module):
             return x.to(self.device)
         elif isinstance(x, Image.Image):
             w, h = x.size
+            logger.info("Processing image, size: [%d, %d]", w, h)
             resolved_transform = self.transform(h, w, patch_size=p_size)
             img_tensor: Tensor = resolved_transform(x).unsqueeze(0).to(self.device)  # type: ignore
             assert self._input_tensor_checks(img_tensor), (
@@ -85,6 +96,7 @@ class PretrainedViTWrapper(Module):
             return img_tensor.to(self.device)
         elif isinstance(x, list) and len(x) > 0 and isinstance(x[0], Image.Image):
             w, h = x[0].size
+            logger.info("Processing %d images, size: [%d, %d]", len(x), w, h)
             resolved_transform = self.transform(h, w, patch_size=p_size)
             stacked = torch.stack([resolved_transform(img) for img in x]).to(self.device)  # type: ignore
             assert self._input_tensor_checks(stacked), (
@@ -103,7 +115,13 @@ class PretrainedViTWrapper(Module):
 
     def forward(self, x: Tensor | Image.Image | list[Image.Image]) -> Tensor:
         x_tensor = self.preprocess_input(x)
-        return self.vit(x_tensor)
+        out = self.vit(x_tensor)
+        logger.info(
+            "Forward: x: [%s] -> f: [%s]",
+            ",".join(map(str, x_tensor.shape)),
+            ",".join(map(str, out.shape)),
+        )
+        return out
 
     def forward_intermediates(
         self,
@@ -127,6 +145,12 @@ class PretrainedViTWrapper(Module):
 
         if make_2D:
             feats = [f.view(b, self.embed_dim, n_patch_h, n_patch_w) for f in feats]
+
+        logger.info(
+            "Forward Intermediates: x: [%s] -> f: %s",
+            ",".join(map(str, x_tensor.shape)),
+            " + ".join(f"[{','.join(map(str, f.shape))}]" for f in feats),
+        )
         return feats
 
     def forward_features(
@@ -162,4 +186,10 @@ class PretrainedViTWrapper(Module):
 
         if make_2D:
             feats = feats.view(b, self.embed_dim, n_patch_h, n_patch_w)
+
+        logger.info(
+            "Forward Features: x: [%s] -> f: [%s]",
+            ",".join(map(str, x_tensor.shape)),
+            ",".join(map(str, feats.shape)),
+        )
         return feats

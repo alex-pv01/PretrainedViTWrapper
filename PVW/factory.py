@@ -17,7 +17,7 @@ from .types import (
     Dv3ViT,
 )
 from .modifications import change_stride, replace_pos_embed
-from .utils import closest_resize
+from .utils import closest_resize, logger
 from .wrapper import PretrainedViTWrapper
 
 Dtype = Literal["float32", "float16"]
@@ -127,6 +127,7 @@ class BackboneRegistry:
 
     @classmethod
     def build(cls, cfg: BackboneConfig) -> ViTBackbone:
+        logger.info("Building backbone with config: %s", cfg)
         builder = cls._registry.get(cfg.backbone_type)
         if not builder:
             raise ValueError(f"Backbone type '{cfg.backbone_type}' not registered in BackboneRegistry.")
@@ -147,6 +148,7 @@ class WrapperRegistry:
 
     @classmethod
     def build(cls, name: str, device: torch.device | str = "cuda", **override_kwargs) -> PretrainedViTWrapper:
+        logger.info("Building wrapper '%s' on device %s", name, device)
         # Auto-register standard architectures if they are not in the registry but are valid timm architectures
         if name not in cls._registry:
             if name in ARCHS_TO_TIMM_IDS:
