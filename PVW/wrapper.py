@@ -11,12 +11,13 @@ class PretrainedViTWrapper(Module):
     def __init__(
         self,
         vit: ViTBackbone,
-        device,
+        device: torch.device | str,
+        dtype: torch.dtype | None = None,
+        transform: ImageTransform = closest_resize,
         name: str = "",
         arch_name: Architectures | None = None,
-        transform: ImageTransform = closest_resize,
     ):
-        """Wrapper around a ViTBackoe (timm or local) with unified typesafe interface.
+        """Wrapper around a ViTBackone (timm or local) with unified typesafe interface.
         Designed for feature extraction of variable sized `x`.
 
 
@@ -35,6 +36,7 @@ class PretrainedViTWrapper(Module):
         self.arch_name: Architectures | None = arch_name
         self.device = device
         self.transform = transform
+        self.dtype = dtype
 
         self.stride = self.vit.patch_embed.proj.stride
         self.patch_size = self.vit.patch_embed.patch_size
@@ -42,7 +44,7 @@ class PretrainedViTWrapper(Module):
         self.embed_dim = self.vit.num_features
         self.num_blocks = len(self.vit.blocks)  # type: ignore
 
-        self.to(device)
+        self.to(device=device, dtype=self.dtype)
         logger.info(
             "Initialized PretrainedViTWrapper - name: '%s', arch: '%s', device: %s, stride: %s, patch_size: %s, embed_dim: %d, num_blocks: %d",
             self.name,
@@ -84,21 +86,21 @@ class PretrainedViTWrapper(Module):
         """
         p_size = self.patch_size[0] if isinstance(self.patch_size, tuple) else self.patch_size
         if isinstance(x, Tensor):
-            return x.to(self.device)
+            return x.to(device=self.device, dtype=self.dtype)
         elif isinstance(x, Image.Image):
             w, h = x.size
             logger.info("Processing image, size: [%d, %d]", w, h)
             resolved_transform = self.transform(h, w, patch_size=p_size)
-            img_tensor: Tensor = resolved_transform(x).unsqueeze(0).to(self.device)  # type: ignore
+            img_tensor: Tensor = resolved_transform(x).unsqueeze(0).to(device=self.device, dtype=self.dtype)  # type: ignore
             assert self._input_tensor_checks(img_tensor), (
                 f"`x` shape :{img_tensor.shape} not valid for patch size {self.patch_size}"
             )
-            return img_tensor.to(self.device)
+            return img_tensor
         elif isinstance(x, list) and len(x) > 0 and isinstance(x[0], Image.Image):
             w, h = x[0].size
             logger.info("Processing %d images, size: [%d, %d]", len(x), w, h)
             resolved_transform = self.transform(h, w, patch_size=p_size)
-            stacked = torch.stack([resolved_transform(img) for img in x]).to(self.device)  # type: ignore
+            stacked = torch.stack([resolved_transform(img) for img in x]).to(device=self.device, dtype=self.dtype)  # type: ignore
             assert self._input_tensor_checks(stacked), (
                 f"`x` shape :{stacked.shape} not valid for patch size {self.patch_size}"
             )
