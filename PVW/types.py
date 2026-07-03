@@ -2,7 +2,7 @@ from torch import Tensor
 from torchvision.transforms import Compose
 from torch.nn import Parameter, Module, Sequential, Linear, Dropout, Conv2d
 
-from typing import Any, Union, Protocol, Literal, ParamSpec, Concatenate, Callable
+from typing import Any, Union, Protocol, Literal, ParamSpec, Concatenate, Callable, TypeVar, Type, TypeGuard
 
 
 P = ParamSpec("P")
@@ -13,6 +13,15 @@ ImageTransform = Callable[Concatenate[int, int, P], Compose]
 These are interfaces defining relevant ViT properties we want for type safety in our wrapper & modification code.
 Should be respected by `timm` and DINO style models.  
 """
+
+T = TypeVar("T")
+
+
+def satisfies_protocol(obj: object, protocol_cls: Type[T]) -> TypeGuard[T]:
+    """Runtime check if an object implements the structural interface of a Protocol class."""
+    if not hasattr(protocol_cls, "__protocol_attrs__"):
+        raise TypeError(f"{protocol_cls} is not a Protocol class")
+    return all(hasattr(obj, attr) for attr in protocol_cls.__protocol_attrs__)
 
 
 class HasAttn(Protocol):

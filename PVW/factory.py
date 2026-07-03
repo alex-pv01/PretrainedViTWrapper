@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Type, Callable, Any, Dict
 from functools import partial
 
-from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone, ImageTransform, ModificationFn
+from .types import TimmArchitectures, ARCHS_TO_IDS, ViTBackbone, ImageTransform, ModificationFn, satisfies_protocol
 from .modifications import change_stride, replace_pos_embed
 from .utils import closest_resize
 from .wrapper import PretrainedViTWrapper
@@ -20,6 +20,7 @@ class BackboneConfig:
     model_arch: TimmArchitectures = "dinov2_s"
     pretrained: bool = True
     checkpoint_path: str | None = None
+    model_conf_path: str | None = None
 
     stride: tuple[int, int] | None = None
     remove_pos_embed: bool = False
@@ -77,8 +78,7 @@ def create_timm_backbone(cfg: BackboneConfig) -> ViTBackbone:
             dynamic_img_pad=cfg.dynamic_img_pad,
             pretrained_strict=False,
         )
-
-    # assert isinstance(vit, VisionTransformer)
+    assert satisfies_protocol(vit, ViTBackbone)
 
     mods = _populate_modifications(cfg.modifications, cfg)
     for mod in mods:
