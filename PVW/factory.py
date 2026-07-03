@@ -97,7 +97,19 @@ def create_timm_backbone(cfg: BackboneConfig) -> TimmViT:
 def create_local_backbone(cfg: BackboneConfig) -> Dv3ViT:
     model_identifier = ARCHS_TO_LOCAL_IDS[cfg.model_arch]
 
-    vit = torch.hub.load(cfg.model_conf_path, model_identifier, source="local", weights=cfg.checkpoint_path)
+    kwargs = {}
+    if cfg.checkpoint_path is not None:
+        kwargs["weights"] = cfg.checkpoint_path
+        kwargs["pretrained"] = True
+    else:
+        kwargs["pretrained"] = False
+
+    vit = torch.hub.load(
+        cfg.model_conf_path,
+        model_identifier,
+        source="local",
+        **kwargs,
+    )
     assert satisfies_protocol(vit, Dv3ViT)
 
     mods = _populate_modifications(cfg.modifications, cfg)

@@ -116,7 +116,13 @@ class PretrainedViTWrapper(Module):
         b, _, _, _ = x_tensor.shape
         n_patch_h, n_patch_w = self._get_tokens_per_dim(x_tensor)
 
-        feats = self.vit.get_intermediate_layers(x_tensor, n=n, reshape=False, norm=norm)
+        if satisfies_protocol(self.vit, TimmViT):
+            feats = self.vit.get_intermediate_layers(x_tensor, n=n, reshape=False, norm=norm)
+        elif satisfies_protocol(self.vit, Dv3ViT):
+            feats = self.vit.get_intermediate_layers(x_tensor, n=n, reshape=False, norm=norm)
+        else:
+            raise TypeError(f"Unsupported ViT type: {type(self.vit)}")
+
         feats = [f.permute(0, 2, 1) for f in feats]
 
         if make_2D:

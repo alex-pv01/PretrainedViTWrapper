@@ -148,8 +148,8 @@ class Dv3ViT(Protocol):
         n: Union[int, list[int], tuple[int]] = 1,
         reshape: bool = False,
         return_prefix_tokens: bool = False,
+        return_extra_tokens: bool = False,
         norm: bool = False,
-        attn_mask: Tensor | None = None,
     ) -> tuple[Tensor | tuple[Tensor, ...]]: ...
 
     def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...

@@ -115,3 +115,20 @@ def test_dinov2_size_agnostic_transform():
     # tokens per dimension = 294 / 14 = 21.
     # Expected feature shape: (1, 384, 21, 21)
     assert features.shape == (1, 384, 21, 21)
+
+
+def test_dinov2_forward_intermediates():
+    # 1. Build the registered "dinov2_s_size_agnostic" model
+    model = WrapperRegistry.build("dinov2_s_size_agnostic", device="cpu")
+    assert isinstance(model, PretrainedViTWrapper)
+
+    # 2. Run forward_intermediates for the last 2 layers
+    pil_img = create_synthetic_image()  # 300x300
+    intermediates = model.forward_intermediates(pil_img, n=2, make_2D=True)
+
+    # We requested n=2 layers, so we should get a list of 2 tensors
+    assert isinstance(intermediates, list)
+    assert len(intermediates) == 2
+    for feat in intermediates:
+        # Expected shape: (1, 384, 21, 21)
+        assert feat.shape == (1, 384, 21, 21)
