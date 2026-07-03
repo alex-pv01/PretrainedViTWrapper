@@ -5,15 +5,18 @@ from .factory import (
     BackboneConfig,
     WrapperConfig,
 )
-from .types import ImageTransform
+from .types import ImageTransform, TimmViT, Dv3ViT, satisfies_protocol
 from .utils import do_pca
 
 __all__ = [
     "PretrainedViTWrapper",
-    "ViTFactory",
+    "WrapperRegistry",
     "BackboneRegistry",
     "BackboneConfig",
     "WrapperConfig",
     "ImageTransform",
+    "TimmViT",
+    "Dv3ViT",
+    "satisfies_protocol",
     "do_pca",
 ]
