@@ -1,4 +1,5 @@
 import os
+import torch
 import pytest
 
 from torchvision import transforms
@@ -167,3 +168,36 @@ def test_dinov3_forward_features_and_intermediates():
     assert len(intermediates) == 2
     for feat in intermediates:
         assert feat.shape == (1, 384, 18, 18)
+
+
+def test_wrapper_dtype_casting():
+    # 1. Register and build a model with a custom dtype (float16)
+    cfg = WrapperConfig(
+        backbone_cfg=BackboneConfig(
+            backbone_type="timm",
+            model_arch="dinov2_s",
+            pretrained=False,
+            dtype=torch.float16,
+        ),
+        dtype=torch.float16,
+    )
+    WrapperRegistry.register("dinov2_s_float16_test", cfg)
+
+    model = WrapperRegistry.build("dinov2_s_float16_test", device="cpu")
+    assert isinstance(model, PretrainedViTWrapper)
+    assert model.dtype == torch.float16
+
+    # Check that backbone parameters were cast to float16
+    for param in model.vit.parameters():
+        assert param.dtype == torch.float16
+        break
+
+    # 2. Run preprocess_input with a PIL image and check output dtype is float16
+    pil_img = create_synthetic_image()
+    tensor = model.preprocess_input(pil_img)
+    assert tensor.dtype == torch.float16
+
+    # 3. Test forward pass shapes and dtype
+    features = model.forward_features(pil_img, make_2D=True)
+    assert features.dtype == torch.float16
+

@@ -99,3 +99,29 @@ def test_load_local_eupe_with_weights():
     )
     vit = BackboneRegistry.build(cfg)
     assert satisfies_protocol(vit, Dv3ViT)
+
+
+@pytest.mark.skipif(DINOV3_DIR_MISSING, reason="models/dinov3 directory is missing")
+def test_load_local_dinov3_remove_pos_embed():
+    cfg = BackboneConfig(
+        backbone_type="torch_hub",
+        model_arch="dinov3_s+",
+        model_conf_path="models/dinov3",
+        checkpoint_path=None,
+        remove_pos_embed=True,
+    )
+    vit = BackboneRegistry.build(cfg)
+    assert vit.rope_embed is None
+
+
+@pytest.mark.skipif(EUPE_DIR_MISSING, reason="models/EUPE directory is missing")
+def test_load_local_eupe_remove_pos_embed():
+    cfg = BackboneConfig(
+        backbone_type="torch_hub",
+        model_arch="EUPE_t",
+        model_conf_path="models/EUPE",
+        checkpoint_path=None,
+        remove_pos_embed=True,
+    )
+    vit = BackboneRegistry.build(cfg)
+    assert vit.rope_embed is None
