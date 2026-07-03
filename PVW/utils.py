@@ -2,6 +2,10 @@ import numpy as np
 import torch
 from torchvision import transforms
 
+import logging
+from sys import stdout
+from time import strftime, localtime
+
 from typing import Literal
 
 
@@ -119,3 +123,59 @@ def do_pca(
             projected = projected.reshape(1, H, W, n_components).permute(0, 3, 1, 2)
 
     return projected
+
+
+# ========== LOGGING ==========
+def add_color(string: str, color_code: str) -> str:
+    RESET_CODE = "\033[0m"
+    return f"{color_code}{string}{RESET_CODE}"
+
+
+class ColorFormatter(logging.Formatter):
+    """Boring custom logger."""
+
+    TIME_COLOR = "\033[90m"  # gray
+    COLORS = {
+        logging.DEBUG: "\033[36m",  # Cyan
+        logging.INFO: "\033[32m",  # Green
+        logging.WARNING: "\033[33m",  # Yellow
+        logging.ERROR: "\033[31m",  # Red
+        logging.CRITICAL: "\033[1;31m",  # Bold Red
+    }
+    RESET = "\033[0m"
+    CHARS = {
+        logging.DEBUG: "D",
+        logging.INFO: "I",
+        logging.WARNING: "W",
+        logging.ERROR: "E",
+        logging.CRITICAL: "C",
+    }
+
+    def format(self, record: logging.LogRecord):
+        fmt = self.datefmt if self.datefmt else self.default_time_format
+        timestamp = strftime(fmt, localtime(record.created))
+
+        color = self.COLORS.get(record.levelno, "")
+
+        padded = record.filename.ljust(27)
+        record.filename = add_color(padded, color)
+        record.levelname = add_color(self.CHARS[record.levelno], color)
+
+        record.asctime_coloured = add_color(timestamp, self.TIME_COLOR)
+        record.lineno_coloured = add_color(f"{record.lineno:4d}", self.TIME_COLOR)
+
+        return super().format(record)
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+handler = logging.StreamHandler(stdout)
+
+formatter = ColorFormatter(
+    fmt="%(asctime_coloured)s | %(levelname)s | %(filename)-30s:%(lineno_coloured)3s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+handler.setFormatter(formatter)
+logger.addHandler(handler)
