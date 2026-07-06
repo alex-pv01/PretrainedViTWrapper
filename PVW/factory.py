@@ -1,7 +1,8 @@
 import torch
 from timm import create_model
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
+from inspect import signature, Parameter
 from typing import Literal, Type, Callable, Any, Dict
 from functools import partial
 
@@ -69,30 +70,38 @@ def _populate_modifications(
     return prev_modifications
 
 
+def _maybe_apply_mods_and_load_checkpoint(vit: ViTBackbone, cfg: BackboneConfig) -> ViTBackbone:
+    # load checkpoints *after* modifications as some checkpoints don't have same structure e.g removed pos embeds
+    mods = _populate_modifications(cfg.modifications, cfg)
+    for mod in mods:
+        vit = mod(vit)
+
+    if cfg.checkpoint_path:
+        logger.info(f"Loading checkpoint: {cfg.checkpoint_path}")
+        state_dict = torch.load(cfg.checkpoint_path, map_location="cpu", weights_only=True)
+        vit.load_state_dict(state_dict, strict=True)
+
+    return vit
+
+
 def create_timm_backbone(cfg: BackboneConfig) -> TimmViT:
     model_identifier = ARCHS_TO_TIMM_IDS[cfg.model_arch]
-
     if "sam" in model_identifier or "conv" in model_identifier:
         vit = create_model(
             model_identifier,
             pretrained=cfg.pretrained,
-            checkpoint_path=cfg.checkpoint_path,
         )
     else:
         vit = create_model(
             model_identifier,
             pretrained=cfg.pretrained,
-            checkpoint_path=cfg.checkpoint_path,
             dynamic_img_size=cfg.dynamic_img_size,
             dynamic_img_pad=cfg.dynamic_img_pad,
             pretrained_strict=False,
         )
     assert satisfies_protocol(vit, TimmViT)
 
-    mods = _populate_modifications(cfg.modifications, cfg)
-    for mod in mods:
-        vit = mod(vit)
-
+    vit = _maybe_apply_mods_and_load_checkpoint(vit, cfg)
     vit = vit.to(dtype=cfg.dtype)
 
     return vit
@@ -101,25 +110,10 @@ def create_timm_backbone(cfg: BackboneConfig) -> TimmViT:
 def create_local_backbone(cfg: BackboneConfig) -> Dv3ViT:
     model_identifier = ARCHS_TO_LOCAL_IDS[cfg.model_arch]
 
-    kwargs = {}
-    if cfg.checkpoint_path is not None:
-        kwargs["weights"] = cfg.checkpoint_path
-        kwargs["pretrained"] = True
-    else:
-        kwargs["pretrained"] = False
-
-    vit = torch.hub.load(
-        cfg.model_conf_path,
-        model_identifier,
-        source="local",
-        **kwargs,
-    )
+    vit = torch.hub.load(cfg.model_conf_path, model_identifier, source="local", pretrained=cfg.pretrained)
     assert satisfies_protocol(vit, Dv3ViT)
 
-    mods = _populate_modifications(cfg.modifications, cfg)
-    for mod in mods:
-        vit = mod(vit)
-
+    vit = _maybe_apply_mods_and_load_checkpoint(vit, cfg)
     vit = vit.to(dtype=cfg.dtype)
 
     return vit
@@ -170,8 +164,18 @@ class WrapperRegistry:
 
         cfg = cls._registry[name]
 
+        backbone_kwargs = {}
+        for f in fields(cfg.backbone_cfg):
+            if f.name in override_kwargs:
+                backbone_kwargs[f.name] = override_kwargs.pop(f.name)
+
+        if backbone_kwargs:
+            backbone_cfg = replace(cfg.backbone_cfg, **backbone_kwargs)
+        else:
+            backbone_cfg = cfg.backbone_cfg
+
         # Build the backbone using BackboneRegistry
-        vit = BackboneRegistry.build(cfg.backbone_cfg)
+        vit = BackboneRegistry.build(backbone_cfg)
 
         # Prepare wrapper parameters
         wrapper_cls = cfg.wrapper_class
@@ -180,9 +184,8 @@ class WrapperRegistry:
             "device": device,
             **override_kwargs,
         }
-        import inspect
-        sig = inspect.signature(wrapper_cls.__init__)
-        if "dtype" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        sig = signature(wrapper_cls.__init__)
+        if "dtype" in sig.parameters or any(p.kind == Parameter.VAR_KEYWORD for p in sig.parameters.values()):
             kwargs["dtype"] = cfg.dtype
 
         transform = kwargs.pop("transform", cfg.transform)

@@ -122,6 +122,8 @@ class TimmViT(Protocol):
 
     def to(self, *args: Any, **kwargs: Any) -> "TimmViT": ...
 
+    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> Any: ...
+
 
 class Dv3ViT(Protocol):
     # Model constants
@@ -158,6 +160,8 @@ class Dv3ViT(Protocol):
 
     def to(self, *args: Any, **kwargs: Any) -> "Dv3ViT": ...
 
+    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> Any: ...
+
 
 ViTBackbone = TimmViT | Dv3ViT
 
@@ -181,6 +185,8 @@ Architectures = Literal[
     "sam_b",
     "clip_b",
     "eva02_b",
+    "convnext",
+    "vit_t_in",
 ]
 ARCHS_TO_TIMM_IDS: dict[Architectures, str] = {
     "dino_s": "vit_small_patch16_224.dino",
@@ -198,6 +204,8 @@ ARCHS_TO_TIMM_IDS: dict[Architectures, str] = {
     "sam_b": "samvit_base_patch16.sa1b",
     "clip_b": "vit_base_patch16_clip_224.openai",
     "eva02_b": "eva02_base_patch14_224.mim_in22k",
+    "convnext": "convnextv2_tiny.fcmae",
+    "vit_t_in": "tiny_vit_5m_224.dist_in22k_ft_in1k",
 }
 
 ARCHS_TO_LOCAL_IDS: dict[Architectures, str] = {

@@ -3,6 +3,7 @@ from torch.nn import Parameter, Sequential
 from types import MethodType
 
 from .types import HasPatchEmbed, HasBlock, TimmViT, Dv3ViT, satisfies_protocol, V
+from .utils import logger
 
 
 def change_stride(vit: V, new_stride: tuple[int, int]) -> V:
@@ -28,7 +29,7 @@ def change_stride(vit: V, new_stride: tuple[int, int]) -> V:
         ) // self.proj.stride[1] + 1
 
     vit.patch_embed.dynamic_feat_size = MethodType(dynamic_feat_size, vit.patch_embed)  # type: ignore
-
+    logger.info(f"Stride changed: {old_sx, old_sy} -> {new_sx, new_sy}")
     return vit
 
 
@@ -43,9 +44,11 @@ def replace_pos_embed(vit: V, new_pos_embed: Tensor | None, requires_grad: bool)
         if isinstance(new_pos_embed, Tensor):
             vit.pos_embed = Parameter(new_pos_embed, requires_grad=requires_grad)
         else:
+            logger.info("Removed default pos. embed")
             vit.pos_embed = None
     elif satisfies_protocol(vit, Dv3ViT):
         vit.rope_embed = None
+        logger.info("Removed RoPE pos. embed")
     return vit
 
 
@@ -57,5 +60,5 @@ def replace_blocks(vit: V, new_blocks: list[HasBlock]) -> V:
         new_blocks (Tensor): The new blocks to set.
     """
     vit.blocks = Sequential(*new_blocks)  # type: ignore
-
+    logger.info(f"Replaced blocks with {len(new_blocks)} {new_blocks[0].__class__.__name__}")
     return vit
