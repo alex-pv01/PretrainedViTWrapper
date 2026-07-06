@@ -87,7 +87,18 @@ class HasPatchEmbed(Protocol):
     def dynamic_feat_size(self, img_size: tuple[int, int]) -> tuple[int, int]: ...
 
 
-class TimmViT(Protocol):
+class BaseViTMixin(Protocol):
+    num_features: int
+    patch_embed: HasPatchEmbed
+    blocks: Sequential | Module
+    state_dict: dict[str, Any]
+
+    def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
+
+    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> Any: ...
+
+
+class TimmViT(BaseViTMixin, Protocol):
     # Model constants
     num_features: int
 
@@ -95,10 +106,6 @@ class TimmViT(Protocol):
 
     # Layers
     pos_embed: Parameter | None
-
-    patch_embed: HasPatchEmbed
-
-    blocks: Sequential | Module
 
     # Methods
     def forward_features(
@@ -118,25 +125,15 @@ class TimmViT(Protocol):
         attn_mask: Tensor | None = None,
     ) -> list[Tensor]: ...
 
-    def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
-
     def to(self, *args: Any, **kwargs: Any) -> "TimmViT": ...
 
-    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> Any: ...
 
-
-class Dv3ViT(Protocol):
+class Dv3ViT(BaseViTMixin, Protocol):
     # Model constants
-    num_features: int
-
     n_storage_tokens: int
 
     # Layers
     rope_embed: Parameter | None
-
-    patch_embed: HasPatchEmbed
-
-    blocks: Sequential | Module
 
     # Methods
     def forward_features(
@@ -156,11 +153,7 @@ class Dv3ViT(Protocol):
         norm: bool = False,
     ) -> tuple[Tensor | tuple[Tensor, ...]]: ...
 
-    def __call__(self, x: Tensor, *args: Any, **kwds: Any) -> Tensor: ...
-
     def to(self, *args: Any, **kwargs: Any) -> "Dv3ViT": ...
-
-    def load_state_dict(self, state_dict: dict[str, Any], strict: bool = True) -> Any: ...
 
 
 ViTBackbone = TimmViT | Dv3ViT
