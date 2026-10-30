@@ -188,7 +188,7 @@ ARCHS_TO_TIMM_IDS: dict[Architectures, str] = {
     "dino_b": "vit_base_patch16_224.dino",
     "dinov2_s": "vit_small_patch14_reg4_dinov2.lvd142m",
     "dinov2_b": "vit_base_patch14_reg4_dinov2.lvd142m",
-    "dinov2_l": "vit_large_patch14_reg_dinov2.lvd142m",
+    "dinov2_l": "vit_large_patch14_reg4_dinov2.lvd142m",
     "dinov3_s": "vit_small_patch16_dinov3.lvd1689m",
     "dinov3_s+": "vit_small_plus_patch16_dinov3.lvd1689m",
     "dinov3_b": "vit_base_patch16_dinov3.lvd1689m",
